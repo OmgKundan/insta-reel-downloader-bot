@@ -52,4 +52,6 @@ def relay_response(message):
                 bot.send_message(ADMIN_CHAT_ID, f"📩 Bot replied:\n\n{message.text}")
         except Exception as e:
             print("Relay Error:", e)
-
+if __name__ == "__main__":
+    print("Bot started...")
+    bot.infinity_polling()
