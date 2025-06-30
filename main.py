@@ -1,62 +1,55 @@
 import telebot
-import requests
 import os
 from dotenv import load_dotenv
 
-# 🔐 Load bot token from Railway Environment Variable
+# Load your Telegram bot token from environment
 load_dotenv()
-API_TOKEN = os.getenv("BOT_TOKEN")
-bot = telebot.TeleBot(API_TOKEN)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# 🎬 Download Reel using SnapInsta API
-def fetch_download_url(insta_url):
-    api_url = 'https://api.snapinsta.app/api/reel'
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    payload = {'url': insta_url}
-    try:
-        res = requests.post(api_url, json=payload, headers=headers)
-        print("SnapInsta Call:", insta_url)
-        print("Status:", res.status_code)
-        if res.status_code == 200:
-            data = res.json()
-            if 'media' in data and isinstance(data['media'], list):
-                return data['media'][0]
-    except Exception as e:
-        print("Error:", e)
-    return None
+# 👇 Backend bot and your admin chat ID
+FORWARD_TO = "@SaveAsBot"
+ADMIN_CHAT_ID = 8195087542
 
-# 🤖 /start command
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
+def welcome(message):
     bot.reply_to(message,
-        "👋 Welcome to *Instagram Reels Downloader Bot!*\n\n"
-        "📥 Send any public Instagram Reel link.\n"
-        "🚀 Instant download link with no watermark.\n\n"
-        "🔥 Join [@movie_downloader_channel](https://t.me/movie_downloader_channel)",
+        "👋 *Welcome to Insta Reel Downloader!*\n\n"
+        "📥 Send me any public Instagram reel link.\n"
+        "🚀 I’ll fetch and send you the download link in seconds.\n\n"
+        "🔥 Join [@movie_downloader_channel](https://t.me/movie_downloader_channel) for more tools!",
         parse_mode="Markdown")
 
-# 📩 Handle any message
 @bot.message_handler(func=lambda m: True)
-def handle_message(msg):
-    text = msg.text.strip()
+def handle_message(message):
+    text = message.text.strip()
     print("Received:", text)
 
     if "instagram.com" in text and "/reel/" in text:
-        bot.send_chat_action(msg.chat.id, 'typing')
-        video_url = fetch_download_url(text)
-        if video_url:
-            bot.send_message(msg.chat.id, "🎬 *Your Download Link:*", parse_mode="Markdown")
-            bot.send_message(msg.chat.id, video_url)
-            bot.send_message(msg.chat.id,
-                "🚀 For HD Reels, Click 👉 [YouTube.com](https://youtube.com)",
-                parse_mode="Markdown", disable_web_page_preview=True)
-        else:
-            bot.send_message(msg.chat.id, "⚠️ Couldn't fetch video. Make sure it's a *public* reel.", parse_mode="Markdown")
+        bot.send_chat_action(message.chat.id, 'typing')
+        
+        try:
+            forwarded = bot.forward_message(FORWARD_TO, message.chat.id, message.message_id)
+            bot.send_message(message.chat.id, "⏳ Fetching your download link...")
+            bot.send_message(ADMIN_CHAT_ID, f"📨 New reel request:\n{text}")
+        except Exception as e:
+            print("Forward Error:", e)
+            bot.send_message(message.chat.id, "⚠️ Failed to forward. Try again later.")
     else:
-        bot.send_message(msg.chat.id, "❌ Please send a valid Instagram *reel* link.", parse_mode="Markdown")
+        bot.send_message(message.chat.id, "❌ Please send a valid Instagram *reel* link.", parse_mode="Markdown")
 
-# 🔄 Keep polling
-bot.infinity_polling()
+# (Optional) Relay response from backend bot to admin
+@bot.message_handler(content_types=['video', 'photo', 'text'])
+def relay_response(message):
+    if message.from_user.username == FORWARD_TO.replace("@", ""):
+        try:
+            # Send it back to the admin (you)
+            if message.video:
+                bot.send_video(ADMIN_CHAT_ID, message.video.file_id, caption=message.caption or "🎬")
+            elif message.photo:
+                bot.send_photo(ADMIN_CHAT_ID, message.photo[-1].file_id, caption=message.caption or "")
+            elif message.text:
+                bot.send_message(ADMIN_CHAT_ID, f"📩 Bot replied:\n\n{message.text}")
+        except Exception as e:
+            print("Relay Error:", e)
+
